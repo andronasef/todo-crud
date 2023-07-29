@@ -64,9 +64,9 @@ export const GET = async () => {
 
 export const PUT = async ({ request }) => {
   const data = await request.json();
-  const { id, status } = data;
+  const { id, is_checked } = data;
 
-  if (!id && !status) {
+  if (!id && !is_checked) {
     return new Response(
       JSON.stringify({ success: false, error: 'No data provided' }),
       {
@@ -77,7 +77,7 @@ export const PUT = async ({ request }) => {
   }
 
   await sql`
-      UPDATE todos SET status = ${status} WHERE id = ${id}
+      UPDATE todos SET is_checked = ${is_checked} WHERE id = ${id}
       `;
   return new Response(JSON.stringify({ success: true }), {
     headers: { 'Content-Type': 'application/json' },

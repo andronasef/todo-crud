@@ -1,5 +1,6 @@
-<script>
+<script lang="ts">
   import Center from '$lib/components/center.svelte';
+  import type Todo from '$lib/types/todo';
   import {
     Button,
     Checkbox,
@@ -7,15 +8,20 @@
     Input,
     Li,
     List,
-    P,
     Spinner,
   } from 'flowbite-svelte';
   import { onMount } from 'svelte';
   import toast, { Toaster } from 'svelte-french-toast';
   import { flip } from 'svelte/animate';
   import { fly, slide } from 'svelte/transition';
+
   let newTodoTitle = '';
-  let todos;
+  // list of type Todo
+  let todos: Todo[];
+
+  onMount(async () => {
+    todos = await getTodos();
+  });
 
   async function getTodos() {
     const res = await fetch('/api/todo');
@@ -26,11 +32,7 @@
     }
   }
 
-  onMount(async () => {
-    todos = await getTodos();
-  });
-
-  async function addtodo(title) {
+  async function addtodo(title: string) {
     if (!(String(title).length > 3)) {
       toast.error('Title is required and must be at least 3 characters long');
       return;
@@ -43,27 +45,31 @@
       body: JSON.stringify({
         title: title,
       }),
-    }).catch((e) => {
-      toast.error('Something went wrong');
-    });
-
-    if (req.ok) {
-      todos =
-        todos.length == 0
-          ? await getTodos()
-          : [
-              ...todos,
-              {
-                id: todos[todos.length - 1].id + 1,
-                full_text: title,
-                status: 0,
-              },
-            ];
-      newTodoTitle = '';
-    }
+    })
+      .then(async (fulfilled) => {
+        if (!fulfilled) return;
+        todos =
+          todos.length == 0
+            ? await getTodos()
+            : [
+                ...todos,
+                {
+                  id:
+                    todos
+                      .map((todo) => todo.id)
+                      .reduce((a, b) => Math.max(a, b)) + 1,
+                  full_text: title,
+                  status: 0,
+                },
+              ];
+        newTodoTitle = '';
+      })
+      .catch((e) => {
+        toast.error('Something went wrong');
+      });
   }
 
-  async function deletetodo(id) {
+  async function deletetodo(id: number) {
     const req = await fetch('/api/todo', {
       method: 'DELETE',
       headers: {
@@ -72,16 +78,23 @@
       body: JSON.stringify({
         id: id,
       }),
-    }).catch((e) => {
-      toast.error('Something went wrong');
-    });
-    if (req.ok) {
-      todos = todos.filter((todo) => todo.id != id);
-    }
+    })
+      .then((fulfilled) => {
+        if (!fulfilled) return;
+        todos = todos.filter((todo) => todo.id != id);
+      })
+      .catch((e) => {
+        toast.error('Something went wrong');
+      });
   }
 
-  async function toggleDone(id, checked) {
-    console.log(id);
+  async function toggleDone(id: number, checked: boolean) {
+    todos = todos.map((todo) => {
+      if (todo.id == id) {
+        todo.is_checked = checked;
+      }
+      return todo;
+    });
     const req = await fetch('/api/todo', {
       method: 'PUT',
       headers: {
@@ -89,13 +102,12 @@
       },
       body: JSON.stringify({
         id: id,
-        status: checked == true ? 1 : 0,
+        is_checked: checked,
       }),
     }).catch((e) => {
-      console.log(e);
       todos = todos.map((todo) => {
         if (todo.id == id) {
-          todo.status = checked == true ? 0 : 1;
+          todo.is_checked = !checked;
         }
         return todo;
       });
@@ -125,9 +137,11 @@
             >
               <Li class="flex items-center gap-3 justify-between">
                 <Checkbox
-                  checked={todo.status == 1}
-                  on:change={(e) => toggleDone(todo.id, e.target.checked)}
-                  ><P class="ml" size="xl">{todo.full_text}</P></Checkbox
+                  bind:checked={todo.is_checked}
+                  on:click={() => toggleDone(todo.id, !todo.is_checked)}
+                  ><p class:line-through={todo.is_checked} class="text-xl">
+                    {todo.full_text}
+                  </p></Checkbox
                 >
                 <Button
                   size="sm"
@@ -163,7 +177,7 @@
       </Center>>
     {/if}
   </div>
-  <form class="w-full lg:w-80 self-center">
+  <form class="w-full lg:max-w-sm self-center">
     <Input
       id="addtodo"
       placeholder="Todo title"
